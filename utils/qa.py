@@ -25,7 +25,7 @@ def grab_qa_for(quiz="linux"):
     dirty_answers   = []
     
     all_files = [f for f in path.glob('**/*.md') if quiz in str(f)]
-
+    
     if not all_files:
         for child_dir in path.glob('*/'):
             if child_dir.is_dir() and "quizzes" in str(child_dir):
@@ -69,7 +69,7 @@ def grab_qa_for(quiz="linux"):
                 clean_a = re.sub(r'[^\w]', '', answer.group(1).lower())
                 c_answers.append(clean_a)
                 dirty_answers.append(answer.group(1))
-
+                
         """
         total_qa = []
         with open(file, 'r') as outfile:
@@ -90,7 +90,6 @@ def grab_qa_for(quiz="linux"):
                 print(clean_q,clean_a)
         """
 
-            
-    return (c_questions, c_answers), (dirty_questions, dirty_answers)
+   
 
-grab_qa_for(quiz="linux")
+    return (c_questions, c_answers), (dirty_questions, dirty_answers)

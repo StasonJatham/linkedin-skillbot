@@ -59,7 +59,9 @@ def run_all(driver):
         exam_link = f"https://www.linkedin.com/skill-assessments/{exam_s}/quiz-intro/"
        
         selected_qa = 0
-        exam = exam.replace("assessment","").strip()
+        exam = exam.replace("assessment","").replace("microsoft","").strip()
+
+            
         l = exam.split(" ")
         clean_qa, dirty_qa = grab_qa_for(quiz=exam)
         if not clean_qa[0]:
@@ -75,6 +77,7 @@ def run_all(driver):
             wait_until(driver, page_loaded=True)
             wait_until(driver, page_loaded=True)
             
+            time.sleep(3)
             if "quiz-intro" in driver.current_url:
                 if options.get("live"):
                     driver.execute_script("""document.querySelector("button[title='Start']").click()""")
@@ -85,7 +88,7 @@ def run_all(driver):
 
                 wait_until(driver, page_loaded=True)
                 wait_until(driver, page_loaded=True)
-
+                time.sleep(2)
                 # handles our exam taking 
                 during_the_exam(exam, driver,selected_qa)
 
