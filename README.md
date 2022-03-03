@@ -17,6 +17,7 @@ LINKED_IN_PROFILE=https://www.linkedin.com/in/YOURUSERNAME/
 ```
 ### Where it didnt work
 This could be, because the answers aren't correct or it didnt find the correct question/answer file.
+PSA: This list is probably not complete, these are just the ones I noticed.
 - Object-Oriented Programming (OOP) Assessment
 - Rust (Programming Language) Assessment
 - JSON Assessment
@@ -59,7 +60,7 @@ This could be, because the answers aren't correct or it didnt find the correct q
 - Adobe Lightroom Assessment
 - Revit Assessment
 - QuickBooks Assessment
-- 
+- Adobe InDesign
 
 
 ### TODO:

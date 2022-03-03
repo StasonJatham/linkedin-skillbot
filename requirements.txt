@@ -1,0 +1,4 @@
+numpy==1.21.4
+python-decouple==3.6
+selenium==4.1.2
+webdriver_manager==3.5.2
