@@ -2,10 +2,20 @@
 Gotta solve em all!
 
 ### Usage
-Just start and go pretty much. I will add a requirements in the future for now just `pip3 install` whatever python tells you to :)
+Just start and go pretty much.
+```
+git clone https://github.com/StasonJatham/linkedin-skillbot.git
+```
+```
+cd linkedin-skillbot
+```
+```
+pip3 install -r requirements.txt
+```
 ```
 python3 linkedin_parser.py --show --live
 ```
+
  - `--show` Opens ChromeDriver in front aka. look how computer make magic and clicky on buttons without doing anything. Otherwise it will start headless.
  - `--live` This sets it to solve actual tests, if not set it will run "practice" (I used this for testing.)
 ### .env
