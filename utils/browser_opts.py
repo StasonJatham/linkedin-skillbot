@@ -3,7 +3,6 @@ from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 
-
 def browser_options(arg_options):
     headless = True
     if arg_options['show']:

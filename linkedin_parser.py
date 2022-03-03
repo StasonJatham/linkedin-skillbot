@@ -5,9 +5,11 @@ import argparse
 from decouple import config
 import urllib.parse
 import re
-from utils.qa import grab_qa_for
+from utils.qa import grab_qa_for, search_string_in_everything
+from utils.levenshtein import levenshtein_ratio_and_distance
 from utils.browser_opts import browser_options
 from utils.utillities import wait_until, strtobool
+from selenium.webdriver.common.by import By
 
 my_parser = argparse.ArgumentParser()
 my_parser.add_argument('-s', '--show',
@@ -32,7 +34,7 @@ EXAM_NAME         = ""
 def main():
     driver = browser_options(options)
     if EXAM_NAME:
-        clean_qa, dirty_qa = grab_qa_for(quiz=EXAM_NAME)
+        clean_qa, qa_pairs = grab_qa_for(quiz=EXAM_NAME)
         if clean_qa[0]:
             login(driver)
             wait_until(driver, page_loaded=True)
@@ -41,9 +43,6 @@ def main():
         login(driver)
         wait_until(driver, page_loaded=True)
         run_all(driver)
-
-
-
 
 
 def run_all(driver):
@@ -63,10 +62,10 @@ def run_all(driver):
 
             
         l = exam.split(" ")
-        clean_qa, dirty_qa = grab_qa_for(quiz=exam)
+        clean_qa, qa_pairs = grab_qa_for(quiz=exam)
         if not clean_qa[0]:
             for x in l:
-                clean_qa,dirty_qa = grab_qa_for(quiz=x.replace("(","").replace(")",""))
+                clean_qa,qa_pairs = grab_qa_for(quiz=x.replace("(","").replace(")",""))
                 if clean_qa[0]:
                     selected_qa = clean_qa
         else:
@@ -90,8 +89,9 @@ def run_all(driver):
                 wait_until(driver, page_loaded=True)
                 time.sleep(2)
                 # handles our exam taking 
-                during_the_exam(exam, driver,selected_qa)
+                during_the_exam(exam, driver,selected_qa,qa_pairs)
 
+                time.sleep(60)
                 # after exam go back to profile
                 # maybe we add more here we wanna do after 
                 #result, score = after_exam()
@@ -127,22 +127,17 @@ def login(driver):
         sys.exit()
 
     wait_until(driver, page_loaded=True)
-    username = driver.find_element_by_id("username")
-    password = driver.find_element_by_id("password")
+    username = driver.find_element(By.ID, "username")
+    password = driver.find_element(By.ID, "password")
 
     username.send_keys(LINKED_IN_USER)
     password.send_keys(LINKED_IN_PASS)
     
     wait_until(driver, page_loaded=True)
-    #wait_until(
-    #    driver=driver,
-    #    jquery=f'$("#username").val() == "{LINKED_IN_USER}" && $("#password").val() == "{LINKED_IN_PASS}"'
-    #)
     time.sleep(3)
-    driver.find_element_by_css_selector(".btn__primary--large").click()
+    driver.find_element(By.CSS_SELECTOR,".btn__primary--large").click()
     wait_until(driver, page_loaded=True)
     wait_until(driver, js='document.querySelector("#global-nav-typeahead").id.length > 0')
-
     change_lang(driver)
 
 
@@ -194,20 +189,29 @@ def to_quiz_page(driver):
 def get_all_test(driver):
     for _ in range(0,6):
         # scroll down to "Show more assesments"
-        driver.execute_script('var buttons = document.querySelectorAll("button");for (var i = 0; i < buttons.length; i++){if(buttons[i].innerText.includes("more")){buttons[i].scrollIntoView();};};')
-        time.sleep(2)
+        try:
+            driver.execute_script('var buttons = document.querySelectorAll("button");for (var i = 0; i < buttons.length; i++){if(buttons[i].innerText.includes("more")){buttons[i].scrollIntoView();};};')
+            time.sleep(2)
+        except Exception as e:
+            pass
         # show more 
-        driver.execute_script('document.querySelector(".pv-detail-assessments__pager-row > button").click()')
-        time.sleep(2)
+        try:
+            driver.execute_script('document.querySelector(".pv-detail-assessments__pager-row > button").click()')
+            time.sleep(2)
+        except Exception as e:
+            break
 
     return driver.execute_script('return (function assesments(){var l=[];document.querySelectorAll(".pv-assessment-item__title").forEach((e)=>{l.push(e.innerText.toLowerCase())});return l})()')
 
 
-def during_the_exam(exam_name, driver, selected_qa):
+def during_the_exam(exam_name, driver, selected_qa, qa_pairs):
     
     still_questions = True
     counter = 0
+    
     while still_questions:
+        picked_quest = False
+        
         wait_until(driver, page_loaded=True)
         wait_until(driver, page_loaded=True)
         time.sleep(4)
@@ -255,78 +259,172 @@ def during_the_exam(exam_name, driver, selected_qa):
         except Exception:
             still_questions = False
             return 
-                
+            
+        answers_list = 0 
         try:
-            answers_list = driver.execute_script("""return (function answers(){var l=[];document.querySelectorAll("p[id^=skill-assessment]").forEach((e)=>{l.push(e.querySelector("span[aria-hidden]").innerText)});return l})();""")
-        except Exception as e:
             try:
-                answers_list = driver.execute_script("""return (function answers(){var l=[];document.querySelectorAll("p[id^=skill-assessment]").forEach((e)=>{l.push(e.querySelector("span").innerText.split("\n")[0])});return l})()""")
+                answers_list = driver.execute_script("""return (function answers(){var l=[];document.querySelectorAll("p[id^=skill-assessment]").forEach((e)=>{l.push(e.querySelector("span[aria-hidden]").innerText)});return l})();""")
             except Exception as e:
                 try:
-                    answers_list = driver.execute_script("""return (function answers(){var l=[];document.querySelectorAll("div > ul > li").forEach((e)=>{l.push(e.innerText.split("\n")[0])});return l})()""")
+                    answers_list = driver.execute_script("""return (function answers(){var l=[];document.querySelectorAll("p[id^=skill-assessment]").forEach((e)=>{l.push(e.querySelector("span").innerText.split("\n")[0])});return l})();""")
                 except Exception as e:
-                    print(e)
-                    
+                     answers_list = driver.execute_script("""return (function answers(){var l=[];document.querySelectorAll("div > ul > li").forEach((e)=>{l.push(e.innerText.split("\n")[0])});return l})();""")
+        except Exception as e:  
+            time.sleep(2)   
+            try:
+                answers_list = driver.execute_script("""return (function answers(){var l=[];document.querySelectorAll("p[id^=skill-assessment]").forEach((e)=>{l.push(e.querySelector("span[aria-hidden]").innerText)});return l})();""")
+            except Exception as e:
+                try:
+                    answers_list = driver.execute_script("""return (function answers(){var l=[];document.querySelectorAll("p[id^=skill-assessment]").forEach((e)=>{l.push(e.querySelector("span").innerText.split("\n")[0])});return l})();""")
+                except Exception as e:
+                    try:
+                        answers_list = driver.execute_script('return (function answers(){var l=[];document.querySelectorAll("div > ul > li").forEach((e)=>{l.push(e.innerText.split("\n")[0])});return l})();')
+                    except Exception as e:
+                        print(e)        
+                
         try:         
             time_left = driver.execute_script('return document.querySelector("footer > div > div > span > div").innerText')
         except Exception as e:
             print(e)  
         
-        found = False
-        for question in selected_qa[0]:
-            clean_q = re.sub(r'[^\w]', '', question_text.lower())
-            if question == clean_q:
-                print("We found the question:")
-                print(question)
-                print("------------------------")
-                found = True 
-                
-        if not found:
-            print("We dont have that question:")
-            print(question)
-            print("------------------------")
-        else:
-            found = False
-    
-        pick_answers = []    
-        for answer in selected_qa[1]:
-            for i,ans in enumerate(answers_list, start=0):
-                clean_a = re.sub(r'[^\w]', '', ans.lower())
-                if answer == clean_a:
-                    pick_answers.append((i,answer))
-
-    
-        # make better random answer if multiple choice 
-        if not pick_answers:
-            driver.execute_script('document.querySelectorAll("p[id^=skill-assessment]")['+str(1)+'].click()')
-            time.sleep(2)
-            print("We do not have answers:")
-            print(answers_list)
-            print("------------------------")
-        else:
-            print("We found the answer/s:")
-            print(pick_answers)
-            print("------------------------")
-                
-        # pick answers
-        # TODO: if multiple answers this will fail
-        # we have to do a better search see qa.py for startingpoitn
-        if len(pick_answers) > 1:
-            pick_answers = [pick_answers[0]]
+        try:
+            if not answers_list:
+                try:
+                    answers_list = driver.execute_script('return (function answers(){var l=[];document.querySelectorAll("div > ul > li").forEach((e)=>{l.push(e.innerText.split("\n")[0])});return l})();')
+                except Exception as e:
+                    try:  
+                        answers_list = driver.execute_script('''                                 
+                            function answers(){
+                                var l=[];
+                                document.querySelectorAll("div > ul > li").forEach((e) => {
+                                    l.push(e.innerText.split("\n")[0])
+                                });
+                                return l
+                            }; return answers()''')
+                    except Exception as e:
+                        try:
+                            answers_list = driver.execute_script('var testlist = [];document.querySelectorAll("p[id*=skill-assessment-quiz]").forEach((ti)=>{testlist.push(ti.innerText.split("\n")[0])}); return testlist')
+                        except Exception as e:
+                            print(e)
+                    
+                    
+            if not answers_list:
+                driver.execute_script('document.querySelectorAll("p[id^=skill-assessment]")['+str(1)+'].click()')
+                time.sleep(2)
+            else:
+                found = False
+                question_answers_pair = {}
+                for question in qa_pairs:
+                    clean_q = re.sub(r'[^\w]', '', question_text.lower())
+                    if list(question.keys())[0] == clean_q:
+                        question_answers_pair = question
+                        print("We found the question:")
+                        print(question_answers_pair)
+                        print("------------------------")
+                        found = True 
+                        break 
+                    else:
+                        search_term = question_text
+                        multiple_qa = []
+                        question_answers_pair = next((item for item in qa_pairs if item == search_term), None)
+                        if not question_answers_pair:
+                            for quest in qa_pairs:
+                                if search_term in list(quest.keys())[0]:
+                                    multiple_qa.append(quest)
+                            if len(multiple_qa) > 1:
+                                best_index = 0 
+                                curr = 0 
+                                for num, pair in enumerate(multiple_qa, start=0):
+                                    found_qa = levenshtein_ratio_and_distance(search_term,list(pair.keys())[0])
+                                    if num == 0:
+                                        curr = found_qa
+                                    if found_qa < curr and search_term in list(pair.keys())[0]:
+                                        best_index = num   
+                                question_answers_pair = multiple_qa[best_index]
+                                break   
+                            else:
+                                if not question_answers_pair:
+                                    question_answers_pair = multiple_qa[0] if len(multiple_qa) > 0 else None
+                                
+                if not question_answers_pair:
+                    # do harder search
+                    for question in selected_qa[0]:
+                        clean_q = re.sub(r'[^\w]', '', question_text.lower())
+                        if question == clean_q:
+                            print("We found the question:")
+                            print(question)
+                            print("------------------------")
+                            found = True 
+        
+                if not found:         
+                    print("We dont have that question:")
+                    print(question_text)
+                    print("------------------------")
+                    found = False
             
-        for i in pick_answers:
-            driver.execute_script('document.querySelectorAll("p[id^=skill-assessment]")['+str(i[0])+'].click()')
-            time.sleep(2)
+                pick_answers = []
+                        
+                if not question_answers_pair:
+                    for answer in selected_qa[1]:
+                        for i,ans in enumerate(answers_list, start=0):
+                            clean_a = re.sub(r'[^\w]', '', ans.lower())
+                            if answer == clean_a:
+                                pick_answers.append((i,answer))         
+                    # TODO: if multiple answers this will fail
+                    # we have to do a better search see qa.py for startingpoitn
+                    if len(pick_answers) > 1:
+                        pick_answers = [pick_answers[0]]
+                else:
+                    for answ in list(question_answers_pair.values())[0]:
+                        for i, ans in enumerate(answers_list, start=0):
+                            clean_a = re.sub(r'[^\w]', '', ans.lower())
+                            if answ == clean_a:
+                                pick_answers.append((i,answ))   
+                                        
+                # make better random answer if multiple choice 
+                if not pick_answers:
+                    found = 0 
+                    a_match = ()
+                    for i, answ_opt in enumerate(answers_list, start=0):
+                        found = search_string_in_everything(answ_opt)
+                        if found:
+                            a_match = (i, answ_opt)
+                            break
+                    if a_match:
+                        driver.execute_script('document.querySelectorAll("p[id^=skill-assessment]")['+str(a_match[0])+'].click()')
+                        time.sleep(2)
+                        picked_quest = True 
+                    else:
+                        driver.execute_script('document.querySelectorAll("p[id^=skill-assessment]")['+str(1)+'].click()')
+                        time.sleep(2)
+                        picked_quest = True
+                        print("We do not have answers:")
+                        print(answers_list)
+                        print("------------------------")
+                else:
+                    print("We found the answer/s:")
+                    print(pick_answers)
+                    print("------------------------")
+                    # pick answers
+                    for i in pick_answers:
+                        driver.execute_script('document.querySelectorAll("p[id^=skill-assessment]")['+str(i[0])+'].click()')
+                        time.sleep(2)
+                        picked_quest = True
 
+        except Exception as e:
+            print(e)
+            if not picked_quest:
+                driver.execute_script('document.querySelectorAll("p[id^=skill-assessment]")['+str(1)+'].click()')
+                time.sleep(2)
+                picked_quest = False
+                   
         try:
             next_button = driver.execute_script("Array.from(document.querySelectorAll('button')).find(el => el.innerText === 'Next').click();")
         except Exception as e:
-            print(e)
+            #print(e)
             next_button = driver.execute_script('document.querySelector("footer").querySelector("button").click()')
 
-
-
-
+            
 
 
 """
